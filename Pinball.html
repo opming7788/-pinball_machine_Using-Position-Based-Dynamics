@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>彈珠檯遊戲</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        background-color: #f0f0f0;
+      }
+      canvas {
+        border: 1px solid #000;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
+
+    <script>
+      // 遊戲常數
+      const CANVAS_WIDTH = 400;
+      const CANVAS_HEIGHT = 600;
+      const Ball_R = 10;
+      const gravity = 9.8;
+      const dt = 0.08;
+      const COR_Obs = 0.6;
+
+      // 取得畫布和繪圖內容
+      const canvas = document.getElementById("gameCanvas");
+      const ctx = canvas.getContext("2d");
+
+      // Canvas輔助類 (模擬Python版本的Canvas類)
+      class CanvasHelper {
+        constructor(canvas, ctx) {
+          this.canvas = canvas;
+          this.ctx = ctx;
+          this.objects = {};
+          this.nextId = 0;
+        }
+
+        // 創建矩形
+        create_rectangle(x1, y1, x2, y2, color) {
+          const id = this.nextId++;
+          this.objects[id] = {
+            type: "rectangle",
+            x: x1,
+            y: y1,
+            width: x2 - x1,
+            height: y2 - y1,
+            color: color,
+            outlineColor: null,
+          };
+          this._draw_object(id);
+          return id;
+        }
+
+        // 創建橢圓
+        create_oval(x1, y1, x2, y2, color) {
+          const id = this.nextId++;
+          this.objects[id] = {
+            type: "oval",
+            x: (x1 + x2) / 2,
+            y: (y1 + y2) / 2,
+            radiusX: Math.abs(x2 - x1) / 2,
+            radiusY: Math.abs(y2 - y1) / 2,
+            color: color,
+            outlineColor: null,
+          };
+          this._draw_object(id);
+          return id;
+        }
+
+        // 創建文本
+        create_text(x, y, font, font_size, text, color) {
+          const id = this.nextId++;
+          this.objects[id] = {
+            type: "text",
+            x: x,
+            y: y,
+            font: font,
+            font_size: font_size,
+            text: text,
+            color: color,
+          };
+          this._draw_object(id);
+          return id;
+        }
+
+        // 設置輪廓顏色
+        set_outline_color(id, color) {
+          if (this.objects[id]) {
+            this.objects[id].outlineColor = color;
+            this._draw_object(id);
+          }
+        }
+
+        // 移動物件
+        move(id, dx, dy) {
+          const obj = this.objects[id];
+          if (!obj) return;
+
+          if (obj.type === "rectangle") {
+            obj.x += dx;
+            obj.y += dy;
+          } else if (obj.type === "oval") {
+            obj.x += dx;
+            obj.y += dy;
+          } else if (obj.type === "text") {
+            obj.x += dx;
+            obj.y += dy;
+          }
+          this._redraw_all();
+        }
+
+        // 移動物件到特定位置
+        moveto(id, x, y) {
+          const obj = this.objects[id];
+          if (!obj) return;
+
+          if (obj.type === "rectangle") {
+            obj.x = x;
+            obj.y = y;
+          } else if (obj.type === "oval") {
+            const radiusX = obj.radiusX;
+            const radiusY = obj.radiusY;
+            obj.x = x + radiusX;
+            obj.y = y + radiusY;
+          }
+          this._redraw_all();
+        }
+
+        // 刪除物件
+        delete(id) {
+          if (this.objects[id]) {
+            delete this.objects[id];
+            this._redraw_all();
+          }
+        }
+
+        // 獲取物件左上角X座標
+        get_left_x(id) {
+          const obj = this.objects[id];
+          if (!obj) return 0;
+
+          if (obj.type === "rectangle") {
+            return obj.x;
+          } else if (obj.type === "oval") {
+            return obj.x - obj.radiusX;
+          } else if (obj.type === "text") {
+            return obj.x;
+          }
+          return 0;
+        }
+
+        // 獲取物件左上角Y座標
+        get_top_y(id) {
+          const obj = this.objects[id];
+          if (!obj) return 0;
+
+          if (obj.type === "rectangle") {
+            return obj.y;
+          } else if (obj.type === "oval") {
+            return obj.y - obj.radiusY;
+          } else if (obj.type === "text") {
+            return obj.y;
+          }
+          return 0;
+        }
+
+        // 獲取物件高度
+        get_object_height(id) {
+          const obj = this.objects[id];
+          if (!obj) return 0;
+
+          if (obj.type === "rectangle") {
+            return obj.height;
+          } else if (obj.type === "oval") {
+            return obj.radiusY * 2;
+          }
+          return 0;
+        }
+
+        // 繪製特定物件
+        _draw_object(id) {
+          const obj = this.objects[id];
+          if (!obj) return;
+
+          this.ctx.save();
+
+          if (obj.type === "rectangle") {
+            this.ctx.fillStyle = obj.color;
+            this.ctx.fillRect(obj.x, obj.y, obj.width, obj.height);
+            if (obj.outlineColor) {
+              this.ctx.strokeStyle = obj.outlineColor;
+              this.ctx.strokeRect(obj.x, obj.y, obj.width, obj.height);
+            }
+          } else if (obj.type === "oval") {
+            this.ctx.beginPath();
+            this.ctx.ellipse(
+              obj.x,
+              obj.y,
+              obj.radiusX,
+              obj.radiusY,
+              0,
+              0,
+              Math.PI * 2
+            );
+            this.ctx.fillStyle = obj.color;
+            this.ctx.fill();
+            if (obj.outlineColor) {
+              this.ctx.strokeStyle = obj.outlineColor;
+              this.ctx.stroke();
+            }
+          } else if (obj.type === "text") {
+            this.ctx.fillStyle = obj.color;
+            this.ctx.font = `${obj.font_size}px ${obj.font}`;
+            this.ctx.fillText(obj.text, obj.x, obj.y);
+          }
+
+          this.ctx.restore();
+        }
+
+        // 重繪所有物件
+        _redraw_all() {
+          this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+          for (const id in this.objects) {
+            this._draw_object(parseInt(id));
+          }
+        }
+      }
+
+      // 向量操作函數
+      function vector_dot(a, b) {
+        return a[0] * b[0] + a[1] * b[1];
+      }
+
+      function vector_Length(a) {
+        return Math.sqrt(a[0] ** 2 + a[1] ** 2);
+      }
+
+      function subtract_vector(a_cord, b_cord) {
+        return [a_cord[0] - b_cord[0], a_cord[1] - b_cord[1]];
+      }
+
+      function add_Vector(a_cord, b_cord) {
+        return [a_cord[0] + b_cord[0], a_cord[1] + b_cord[1]];
+      }
+
+      function unit_vector(a) {
+        const length = vector_Length(a);
+        return [a[0] / length, a[1] / length];
+      }
+
+      function scale_vector(a, b) {
+        return [a * b[0], a * b[1]];
+      }
+
+      // 獲取物件位置 (重命名函數避免與全局 location 衝突)
+      function getObjLocation(canvas, obj) {
+        const left_x = canvas.get_left_x(obj);
+        const top_y = canvas.get_top_y(obj);
+        const objcentx = left_x + Ball_R;
+        const objcenty = top_y + Ball_R;
+        return [objcentx, objcenty];
+      }
+
+      // 檢測球是否在發射通道範圍內
+      function inWallRange(canvas, ball, Launch_well) {
+        const left_x = canvas.get_left_x(Launch_well);
+        const top_y = canvas.get_top_y(Launch_well);
+        const height = canvas.get_object_height(Launch_well);
+        const wallSegmPots = [left_x, top_y + height, left_x, top_y];
+
+        const balcenter = getObjLocation(canvas, ball);
+        const Atoball = subtract_vector(balcenter, wallSegmPots.slice(0, 2));
+        const segmPalltoWall = subtract_vector(
+          wallSegmPots.slice(2),
+          wallSegmPots.slice(0, 2)
+        );
+        const vectorPerpWall = [-segmPalltoWall[1], segmPalltoWall[0]];
+
+        const t =
+          vector_dot(Atoball, segmPalltoWall) /
+          vector_dot(segmPalltoWall, segmPalltoWall);
+        const scaledSegm = scale_vector(t, segmPalltoWall);
+        const dir = subtract_vector(Atoball, scaledSegm);
+
+        const DirDotWallPerVal = vector_dot(vectorPerpWall, dir);
+        const DisBalltoWall = vector_Length(dir);
+
+        if (DirDotWallPerVal < 0) {
+          return [DisBalltoWall, t, false];
+        }
+        return [DisBalltoWall, t, true];
+      }
+
+      // 計算軌道與球中心的向量
+      function Orbital_ball_cent_vector(canvas, Orbital, ball) {
+        const left_x = canvas.get_left_x(Orbital);
+        const top_y = canvas.get_top_y(Orbital);
+        const Orbitalcentx = left_x + CANVAS_WIDTH / 2;
+        const Orbitalcenty = top_y + CANVAS_WIDTH / 2;
+
+        const ballPos = getObjLocation(canvas, ball);
+        return subtract_vector([Orbitalcentx, Orbitalcenty], ballPos);
+      }
+
+      // 計算障礙物與球中心的向量
+      function obs_ball_cent_vector(canvas, obstac, ball) {
+        const left_x = canvas.get_left_x(obstac);
+        const top_y = canvas.get_top_y(obstac);
+        const obscentx = left_x + 1.25 * Ball_R;
+        const obscenty = top_y + 1.25 * Ball_R;
+
+        const ballPos = getObjLocation(canvas, ball);
+        return subtract_vector(ballPos, [obscentx, obscenty]);
+      }
+
+      // 分數計算
+      function scoreCounting(pos) {
+        const ScoreSecWidth = (CANVAS_WIDTH - 3.6 * Ball_R) / 5;
+        const score = [1, 2, 3, 2, 1];
+        for (let i = 0; i < 5; i++) {
+          if (pos[0] > ScoreSecWidth * i && pos[0] < ScoreSecWidth * (i + 1)) {
+            return score[i];
+          }
+        }
+        return 0;
+      }
+
+      // 創建分數區域
+      function buildScoreSection(canvas) {
+        const ScoreSecWidth = (CANVAS_WIDTH - 3.6 * Ball_R) / 5;
+        const ScoreSecHeight = 10;
+        const color = ["red", "white", "lime", "skyblue", "fuchsia"];
+        const score = ["1", "2", "3", "2", "1"];
+        const fontsize = 40;
+
+        for (let i = 0; i < 5; i++) {
+          const brick = canvas.create_rectangle(
+            i * ScoreSecWidth,
+            CANVAS_HEIGHT - ScoreSecHeight,
+            (i + 1) * ScoreSecWidth,
+            CANVAS_HEIGHT,
+            color[i]
+          );
+          const text = canvas.create_text(
+            ScoreSecWidth * (i + 1 / 3),
+            CANVAS_HEIGHT - fontsize - 10,
+            "Arial",
+            fontsize,
+            score[i],
+            "black"
+          );
+          canvas.set_outline_color(brick, "black");
+        }
+      }
+
+      // 建立障礙物
+      function bulid(canvas) {
+        const obstacle = [];
+
+        for (let j = 0; j < 4; j++) {
+          for (let i = 0; i < 5; i++) {
+            const obs = canvas.create_oval(
+              30 + 64 * i,
+              CANVAS_WIDTH / 2 + 100 * j - 30,
+              30 + 64 * i + 2.5 * Ball_R,
+              CANVAS_WIDTH / 2 + 2.5 * Ball_R + 100 * j - 30,
+              "blue"
+            );
+            obstacle.push(obs);
+            canvas.set_outline_color(obs, "black");
+          }
+        }
+
+        for (let j = 0; j < 3; j++) {
+          for (let i = 0; i < 5; i++) {
+            const obs = canvas.create_oval(
+              62 + 64 * i,
+              CANVAS_WIDTH / 2 + 20 + 100 * j,
+              62 + 64 * i + 2.5 * Ball_R,
+              CANVAS_WIDTH / 2 + 20 + 2.5 * Ball_R + 100 * j,
+              "blue"
+            );
+            obstacle.push(obs);
+            canvas.set_outline_color(obs, "black");
+          }
+        }
+
+        for (let i = 0; i < 3; i++) {
+          const obs = canvas.create_oval(
+            -1.25 * Ball_R,
+            CANVAS_WIDTH / 2 + 20 + 100 * i,
+            1.25 * Ball_R,
+            CANVAS_WIDTH / 2 + 20 + 2.5 * Ball_R + 100 * i,
+            "blue"
+          );
+          canvas.set_outline_color(obs, "black");
+          obstacle.push(obs);
+        }
+
+        return obstacle;
+      }
+
+      // 遊戲主函數
+      function main() {
+        // 建立 Canvas 輔助類
+        const canvasHelper = new CanvasHelper(canvas, ctx);
+
+        // 背景和基本元素
+        const bacgbottom = canvasHelper.create_rectangle(
+          0,
+          0,
+          CANVAS_WIDTH,
+          CANVAS_HEIGHT,
+          "red"
+        );
+        const bacgOrbital = canvasHelper.create_oval(
+          0,
+          0,
+          CANVAS_WIDTH,
+          CANVAS_WIDTH,
+          "yellow"
+        );
+        const backgrect = canvasHelper.create_rectangle(
+          0,
+          CANVAS_WIDTH / 2,
+          CANVAS_WIDTH,
+          CANVAS_HEIGHT,
+          "yellow"
+        );
+        const Launch_well = canvasHelper.create_rectangle(
+          CANVAS_WIDTH - 3.6 * Ball_R,
+          CANVAS_WIDTH / 2,
+          CANVAS_WIDTH - 2.6 * Ball_R,
+          CANVAS_HEIGHT + CANVAS_WIDTH,
+          "black"
+        );
+
+        let score = 0;
+        let score_Text = canvasHelper.create_text(
+          CANVAS_WIDTH / 3,
+          CANVAS_WIDTH / 4 - 30,
+          "Arial",
+          30,
+          `分數: ${score}`,
+          "black"
+        );
+
+        // 創建球體
+        const ball = canvasHelper.create_oval(
+          CANVAS_WIDTH - 2 * Ball_R,
+          CANVAS_HEIGHT - 2 * Ball_R,
+          CANVAS_WIDTH,
+          CANVAS_HEIGHT,
+          "fuchsia"
+        );
+        canvasHelper.set_outline_color(ball, "black");
+
+        // 創建障礙物和分數區域
+        const obstacle = bulid(canvasHelper);
+        buildScoreSection(canvasHelper);
+
+        // 遊戲主循環
+        function gameLoop() {
+          canvasHelper.moveto(
+            ball,
+            CANVAS_WIDTH - 2 * Ball_R,
+            CANVAS_HEIGHT - 2 * Ball_R
+          );
+          canvasHelper.moveto(
+            Launch_well,
+            CANVAS_WIDTH - 3.6 * Ball_R,
+            CANVAS_WIDTH / 2
+          );
+
+          let vx = 0;
+          let vy = -Math.random() * 20 - 95; // 隨機初始速度
+          let dSx = 0;
+          let dSy = 0;
+
+          function ballLoop() {
+            dSx = vx * dt;
+            dSy = vy * dt;
+            canvasHelper.move(ball, dSx, dSy + 0.5 * gravity * dt * dt);
+
+            const orbcenDis = vector_Length(
+              Orbital_ball_cent_vector(canvasHelper, bacgOrbital, ball)
+            );
+
+            // 軌道碰撞檢測
+            if (
+              getObjLocation(canvasHelper, ball)[1] < CANVAS_WIDTH / 2 &&
+              orbcenDis + Ball_R > CANVAS_WIDTH / 2
+            ) {
+              const delta = orbcenDis + Ball_R - CANVAS_WIDTH / 2;
+              let corrv = unit_vector(
+                Orbital_ball_cent_vector(canvasHelper, bacgOrbital, ball)
+              );
+              corrv = scale_vector(delta, corrv);
+              canvasHelper.move(ball, corrv[0], corrv[1]);
+              const pos = getObjLocation(canvasHelper, ball);
+              corrv = scale_vector(1 / dt, corrv);
+              [vx, vy] = add_Vector([vx, vy], corrv);
+            }
+
+            vy += gravity * dt;
+
+            const pos = getObjLocation(canvasHelper, ball);
+
+            // 發射通道處理
+            if (pos[0] + Ball_R < CANVAS_WIDTH - 3.6 * Ball_R) {
+              canvasHelper.moveto(Launch_well, CANVAS_WIDTH - 3.6 * Ball_R, 0);
+            }
+
+            // 邊界檢測
+            if (pos[0] - Ball_R < 0 || pos[0] + Ball_R > CANVAS_WIDTH) {
+              vx = -vx;
+            }
+
+            // 球體與障礙物碰撞
+            for (const i of obstacle) {
+              const obsDis = vector_Length(
+                obs_ball_cent_vector(canvasHelper, i, ball)
+              );
+              if (obsDis < 2.25 * Ball_R) {
+                const corr_unit = unit_vector(
+                  obs_ball_cent_vector(canvasHelper, i, ball)
+                );
+                const corr = scale_vector(2.25 * Ball_R - obsDis, corr_unit);
+                canvasHelper.move(ball, corr[0], corr[1]);
+                const corrVel = scale_vector(
+                  -(1 + COR_Obs) * vector_dot([vx, vy], corr_unit),
+                  corr_unit
+                );
+                [vx, vy] = add_Vector([vx, vy], corrVel);
+                break;
+              }
+            }
+
+            // 球體與發射通道碰撞
+            const [DistoWell, t, pentrWall] = inWallRange(
+              canvasHelper,
+              ball,
+              Launch_well
+            );
+            if (t > 0 && t < 1) {
+              if (DistoWell < Ball_R || pentrWall) {
+                vx = -vx;
+              }
+            }
+
+            // 檢查球是否離開畫面
+            if (pos[1] > CANVAS_HEIGHT + Ball_R) {
+              // 計算分數
+              score += scoreCounting(pos);
+              canvasHelper.delete(score_Text);
+              score_Text = canvasHelper.create_text(
+                CANVAS_WIDTH / 3,
+                CANVAS_WIDTH / 4 - 30,
+                "Arial",
+                30,
+                `分數: ${score}`,
+                "black"
+              );
+
+              // 重置球體位置，開始新一輪
+              setTimeout(() => {
+                gameLoop();
+              }, 1000);
+              return;
+            }
+
+            // 繼續遊戲循環
+            requestAnimationFrame(ballLoop);
+          }
+
+          // 開始球體循環
+          ballLoop();
+        }
+
+        // 啟動遊戲
+        gameLoop();
+      }
+
+      // 當頁面載入完成後啟動遊戲
+      window.onload = main;
+    </script>
+  </body>
+</html>
