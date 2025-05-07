@@ -34,4 +34,4 @@ This pinball simulator implements a physics engine to simulate the movement of a
 
 Simply open the Pinball.html file in a web browser to start the game. The ball will automatically launch with a random initial velocity, simulating physical motion within the game environment and calculating scores.
 
-You can also [play the game online here](https://opming7788.github.io/-pinball_machine_Using-Position-Based-Dynamics/Pinball.html).
+You can also [play the game online here](https://opming7788.github.io/-pinball_machine_Using-Position-Based-Dynamics/Pinball2.html).
